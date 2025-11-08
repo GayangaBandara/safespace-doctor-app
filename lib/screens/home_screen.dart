@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../authentication/auth_service.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -10,9 +11,11 @@ class HomeScreen extends StatefulWidget {
 
 class HomeScreenState extends State<HomeScreen> {
   final AuthService _authService = AuthService();
+  final SupabaseClient _supabase = Supabase.instance.client;
 
   String? _displayName;
   bool _loading = true;
+  bool _isAvailable = false;
   String? _userId;
 
   // Mock data for dashboard stats
@@ -38,9 +41,25 @@ class HomeScreenState extends State<HomeScreen> {
       _userId = uid;
 
       final name = await _authService.fetchDisplayName();
-      setState(() {
-        _displayName = name;
-      });
+
+      // Fetch doctor's availability status
+      final user = _supabase.auth.currentUser;
+      if (user?.email != null) {
+        final doctorData = await _supabase
+            .from('doctors')
+            .select('avb_status')
+            .eq('email', user!.email!)
+            .single();
+
+        setState(() {
+          _displayName = name;
+          _isAvailable = doctorData['avb_status'] ?? false;
+        });
+      } else {
+        setState(() {
+          _displayName = name;
+        });
+      }
     } catch (e, st) {
       debugPrint('Error initializing user: $e\n$st');
     } finally {
@@ -50,11 +69,69 @@ class HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  Future<void> _toggleAvailability() async {
+    try {
+      final user = _supabase.auth.currentUser;
+      if (user?.email == null) return;
+
+      final newStatus = !_isAvailable;
+
+      // Update the database
+      await _supabase
+          .from('doctors')
+          .update({'avb_status': newStatus})
+          .eq('email', user!.email!);
+
+      // Update local state
+      setState(() {
+        _isAvailable = newStatus;
+      });
+
+      // Show success message
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                Icon(
+                  newStatus ? Icons.check_circle : Icons.info,
+                  color: Colors.white,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  newStatus
+                      ? 'You are now available'
+                      : 'You are now unavailable',
+                ),
+              ],
+            ),
+            backgroundColor: newStatus ? Colors.green : Colors.orange,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to update availability status: $e'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
   String get _greeting {
     if (_loading) return 'Hello Doctor 👋';
     if (_displayName != null && _displayName!.isNotEmpty) {
       final name = _displayName!.trim();
-      if (name.toLowerCase().startsWith('dr') || name.toLowerCase().startsWith('doctor')) {
+      if (name.toLowerCase().startsWith('dr') ||
+          name.toLowerCase().startsWith('doctor')) {
         return 'Hello $name 👋';
       }
       return 'Hello Dr. $name 👋';
@@ -77,6 +154,23 @@ class HomeScreenState extends State<HomeScreen> {
         foregroundColor: Colors.white,
         elevation: 0,
         actions: [
+          // Availability Switch
+          Row(
+            children: [
+              const Text(
+                'Available',
+                style: TextStyle(fontSize: 14, color: Colors.white),
+              ),
+              Switch(
+                value: _isAvailable,
+                onChanged: (bool value) => _toggleAvailability(),
+                activeColor: Colors.white,
+                activeTrackColor: Colors.green,
+                inactiveThumbColor: Colors.white,
+                inactiveTrackColor: Colors.grey,
+              ),
+            ],
+          ),
           IconButton(
             icon: const Icon(Icons.notifications),
             onPressed: () {
@@ -120,10 +214,7 @@ class HomeScreenState extends State<HomeScreen> {
                           const SizedBox(height: 8),
                           const Text(
                             "Welcome to your medical practice management system",
-                            style: TextStyle(
-                              fontSize: 16,
-                              color: Colors.grey,
-                            ),
+                            style: TextStyle(fontSize: 16, color: Colors.grey),
                           ),
                         ],
                       ),
@@ -135,10 +226,7 @@ class HomeScreenState extends State<HomeScreen> {
                   // Stats Grid
                   const Text(
                     "Today's Overview",
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 16),
                   GridView.count(
@@ -167,10 +255,12 @@ class HomeScreenState extends State<HomeScreen> {
                         Colors.orange,
                       ),
                       _buildStatCard(
-                        'Available',
-                        'Now',
-                        Icons.check_circle,
-                        Colors.teal,
+                        'Status',
+                        _isAvailable ? 'Available' : 'Unavailable',
+                        _isAvailable
+                            ? Icons.check_circle
+                            : Icons.pause_circle_filled,
+                        _isAvailable ? Colors.green : Colors.orange,
                       ),
                     ],
                   ),
@@ -180,10 +270,7 @@ class HomeScreenState extends State<HomeScreen> {
                   // Quick Actions
                   const Text(
                     "Quick Actions",
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 16),
                   GridView.count(
@@ -274,7 +361,12 @@ class HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildStatCard(String title, String value, IconData icon, Color color) {
+  Widget _buildStatCard(
+    String title,
+    String value,
+    IconData icon,
+    Color color,
+  ) {
     return Card(
       elevation: 2,
       child: Padding(
@@ -293,18 +385,12 @@ class HomeScreenState extends State<HomeScreen> {
             const SizedBox(height: 8),
             Text(
               value,
-              style: const TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-              ),
+              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
             ),
             Text(
               title,
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 12,
-                color: Colors.grey,
-              ),
+              style: const TextStyle(fontSize: 12, color: Colors.grey),
             ),
           ],
         ),
@@ -312,7 +398,12 @@ class HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildActionCard(String title, IconData icon, Color color, VoidCallback onTap) {
+  Widget _buildActionCard(
+    String title,
+    IconData icon,
+    Color color,
+    VoidCallback onTap,
+  ) {
     return Card(
       elevation: 2,
       child: InkWell(
@@ -347,7 +438,12 @@ class HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildActivityItem(String title, String subtitle, IconData icon, Color color) {
+  Widget _buildActivityItem(
+    String title,
+    String subtitle,
+    IconData icon,
+    Color color,
+  ) {
     return ListTile(
       leading: Container(
         padding: const EdgeInsets.all(8),
@@ -357,10 +453,7 @@ class HomeScreenState extends State<HomeScreen> {
         ),
         child: Icon(icon, color: color, size: 20),
       ),
-      title: Text(
-        title,
-        style: const TextStyle(fontSize: 14),
-      ),
+      title: Text(title, style: const TextStyle(fontSize: 14)),
       subtitle: Text(
         subtitle,
         style: const TextStyle(fontSize: 12, color: Colors.grey),

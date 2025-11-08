@@ -51,6 +51,73 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  Future<void> _updateAvailabilityStatus(bool value) async {
+    try {
+      final user = _supabase.auth.currentUser;
+      if (user == null) return;
+
+      setState(() {
+        _loading = true;
+      });
+
+      // Update the availability status in the database
+      await _supabase
+          .from('doctors')
+          .update({'avb_status': value})
+          .eq('email', user.email!);
+
+      // Update the local state
+      setState(() {
+        if (_doctorProfile != null) {
+          _doctorProfile!['avb_status'] = value;
+        }
+        _loading = false;
+      });
+
+      // Show success message
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                Icon(
+                  value ? Icons.check_circle : Icons.info,
+                  color: Colors.white,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  value ? 'You are now available' : 'You are now unavailable',
+                ),
+              ],
+            ),
+            backgroundColor: value ? Colors.green : Colors.orange,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      setState(() {
+        _loading = false;
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to update availability status: $e'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -60,217 +127,260 @@ class _ProfileScreenState extends State<ProfileScreen> {
         foregroundColor: Colors.white,
         elevation: 0,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.edit),
-            onPressed: _editProfile,
-          ),
+          IconButton(icon: const Icon(Icons.edit), onPressed: _editProfile),
         ],
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        _error!,
-                        style: const TextStyle(color: Colors.red),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 16),
-                      ElevatedButton(
-                        onPressed: _fetchDoctorProfile,
-                        child: const Text('Retry'),
-                      ),
-                    ],
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    _error!,
+                    style: const TextStyle(color: Colors.red),
+                    textAlign: TextAlign.center,
                   ),
-                )
-              : _doctorProfile == null
-                  ? const Center(
-                      child: Text('No profile data found'),
-                    )
-                  : SingleChildScrollView(
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    onPressed: _fetchDoctorProfile,
+                    child: const Text('Retry'),
+                  ),
+                ],
+              ),
+            )
+          : _doctorProfile == null
+          ? const Center(child: Text('No profile data found'))
+          : SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  // Profile Header
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: Colors.teal.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Column(
+                      children: [
+                        CircleAvatar(
+                          radius: 50,
+                          backgroundColor: Colors.teal,
+                          child: _doctorProfile!['profilepicture'] != null
+                              ? ClipOval(
+                                  child: Image.network(
+                                    _doctorProfile!['profilepicture'],
+                                    width: 100,
+                                    height: 100,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (context, error, stackTrace) {
+                                      return _buildInitialsAvatar();
+                                    },
+                                  ),
+                                )
+                              : _buildInitialsAvatar(),
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          _doctorProfile!['name'] ?? 'No Name',
+                          style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          _doctorProfile!['category'] ?? 'No Specialization',
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: Colors.teal.shade700,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          _doctorProfile!['dominant_state'] ??
+                              'No hospital info',
+                          style: const TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  // Profile Details
+                  Card(
+                    elevation: 2,
+                    child: Padding(
                       padding: const EdgeInsets.all(16),
                       child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Profile Header
-                          Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(20),
-                            decoration: BoxDecoration(
-                              color: Colors.teal.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            child: Column(
-                              children: [
-                                CircleAvatar(
-                                  radius: 50,
-                                  backgroundColor: Colors.teal,
-                                  child: _doctorProfile!['profilepicture'] != null
-                                      ? ClipOval(
-                                          child: Image.network(
-                                            _doctorProfile!['profilepicture'],
-                                            width: 100,
-                                            height: 100,
-                                            fit: BoxFit.cover,
-                                            errorBuilder: (context, error, stackTrace) {
-                                              return _buildInitialsAvatar();
-                                            },
-                                          ),
-                                        )
-                                      : _buildInitialsAvatar(),
-                                ),
-                                const SizedBox(height: 16),
-                                Text(
-                                  _doctorProfile!['name'] ?? 'No Name',
-                                  style: const TextStyle(
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  _doctorProfile!['category'] ?? 'No Specialization',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    color: Colors.teal.shade700,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  _doctorProfile!['dominant_state'] ?? 'No hospital info',
-                                  style: const TextStyle(
-                                    fontSize: 14,
-                                    color: Colors.grey,
-                                  ),
-                                ),
-                              ],
+                          const Text(
+                            'Professional Information',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
                             ),
                           ),
-                          
-                          const SizedBox(height: 24),
-                          
-                          // Profile Details
-                          Card(
-                            elevation: 2,
-                            child: Padding(
-                              padding: const EdgeInsets.all(16),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text(
-                                    'Professional Information',
-                                    style: TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 16),
-                                  _buildProfileItem('Specialization', _doctorProfile!['category'] ?? 'Not specified'),
-                                  _buildProfileItem('Dominant State', _doctorProfile!['dominant_state'] ?? 'Not specified'),
-                                  _buildProfileItem('Member Since', _formatDate(_doctorProfile!['created_at'])),
-                                ],
-                              ),
-                            ),
-                          ),
-                          
                           const SizedBox(height: 16),
-                          
-                          // Contact Information
-                          Card(
-                            elevation: 2,
-                            child: Padding(
-                              padding: const EdgeInsets.all(16),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text(
-                                    'Contact Information',
-                                    style: TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 16),
-                                  _buildContactItem(Icons.email, _doctorProfile!['email'] ?? 'No email'),
-                                  _buildContactItem(Icons.phone, _doctorProfile!['phone'] ?? 'No phone'),
-                                ],
+                          _buildProfileItem(
+                            'Specialization',
+                            _doctorProfile!['category'] ?? 'Not specified',
+                          ),
+                          _buildProfileItem(
+                            'Dominant State',
+                            _doctorProfile!['dominant_state'] ??
+                                'Not specified',
+                          ),
+                          _buildProfileItem(
+                            'Member Since',
+                            _formatDate(_doctorProfile!['created_at']),
+                          ),
+                          const Divider(height: 24),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text(
+                                'Availability Status',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w500,
+                                  color: Colors.grey,
+                                ),
                               ),
-                            ),
+                              Switch(
+                                value: _doctorProfile!['avb_status'] ?? false,
+                                onChanged: _updateAvailabilityStatus,
+                                activeColor: Colors.teal,
+                              ),
+                            ],
                           ),
-                          
-                          const SizedBox(height: 24),
-                          
-                          // Actions
-                          SizedBox(
-                            width: double.infinity,
-                            child: Column(
-                              children: [
-                                ElevatedButton.icon(
-                                  onPressed: _changePassword,
-                                  icon: const Icon(Icons.lock),
-                                  label: const Text('Change Password'),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.teal,
-                                    foregroundColor: Colors.white,
-                                    padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(height: 12),
-                                Container(
-                                  width: double.infinity,
-                                  decoration: BoxDecoration(
-                                    gradient: LinearGradient(
-                                      colors: [Colors.red.shade50, Colors.red.shade100],
-                                      begin: Alignment.centerLeft,
-                                      end: Alignment.centerRight,
-                                    ),
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(color: Colors.red.shade200, width: 1),
-                                  ),
-                                  child: OutlinedButton.icon(
-                                    onPressed: _logout,
-                                    icon: const Icon(
-                                      Icons.logout_rounded,
-                                      color: Colors.red,
-                                      size: 20,
-                                    ),
-                                    label: const Text(
-                                      'Logout',
-                                      style: TextStyle(
-                                        color: Colors.red,
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                    style: OutlinedButton.styleFrom(
-                                      foregroundColor: Colors.red,
-                                      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      side: BorderSide.none,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 20),
                         ],
                       ),
                     ),
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // Contact Information
+                  Card(
+                    elevation: 2,
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Contact Information',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          _buildContactItem(
+                            Icons.email,
+                            _doctorProfile!['email'] ?? 'No email',
+                          ),
+                          _buildContactItem(
+                            Icons.phone,
+                            _doctorProfile!['phone'] ?? 'No phone',
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  // Actions
+                  SizedBox(
+                    width: double.infinity,
+                    child: Column(
+                      children: [
+                        ElevatedButton.icon(
+                          onPressed: _changePassword,
+                          icon: const Icon(Icons.lock),
+                          label: const Text('Change Password'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.teal,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(
+                              vertical: 16,
+                              horizontal: 20,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Container(
+                          width: double.infinity,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [Colors.red.shade50, Colors.red.shade100],
+                              begin: Alignment.centerLeft,
+                              end: Alignment.centerRight,
+                            ),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: Colors.red.shade200,
+                              width: 1,
+                            ),
+                          ),
+                          child: OutlinedButton.icon(
+                            onPressed: _logout,
+                            icon: const Icon(
+                              Icons.logout_rounded,
+                              color: Colors.red,
+                              size: 20,
+                            ),
+                            label: const Text(
+                              'Logout',
+                              style: TextStyle(
+                                color: Colors.red,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.red,
+                              padding: const EdgeInsets.symmetric(
+                                vertical: 16,
+                                horizontal: 20,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              side: BorderSide.none,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                ],
+              ),
+            ),
     );
   }
 
   Widget _buildInitialsAvatar() {
     final name = _doctorProfile?['name'] ?? 'D';
-    final initials = name.split(' ').map((e) => e.isNotEmpty ? e[0] : '').take(2).join();
+    final initials = name
+        .split(' ')
+        .map((e) => e.isNotEmpty ? e[0] : '')
+        .take(2)
+        .join();
     return Text(
       initials,
       style: const TextStyle(
@@ -300,9 +410,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           Expanded(
             child: Text(
               value,
-              style: const TextStyle(
-                fontWeight: FontWeight.w400,
-              ),
+              style: const TextStyle(fontWeight: FontWeight.w400),
             ),
           ),
         ],
@@ -317,12 +425,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         children: [
           Icon(icon, size: 20, color: Colors.teal),
           const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(fontSize: 14),
-            ),
-          ),
+          Expanded(child: Text(value, style: const TextStyle(fontSize: 14))),
         ],
       ),
     );
@@ -351,7 +454,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     // TODO: Implement change password functionality using Supabase auth
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('Change password functionality - will open password reset'),
+        content: Text(
+          'Change password functionality - will open password reset',
+        ),
       ),
     );
   }
@@ -360,23 +465,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Row(
           children: [
-            Icon(
-              Icons.logout,
-              color: Colors.red,
-              size: 24,
-            ),
+            Icon(Icons.logout, color: Colors.red, size: 24),
             SizedBox(width: 12),
             Text(
               'Logout',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                color: Colors.red,
-              ),
+              style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red),
             ),
           ],
         ),
@@ -386,18 +482,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
           children: [
             Text(
               'Are you sure you want to logout?',
-              style: TextStyle(
-                fontSize: 16,
-                color: Colors.black87,
-              ),
+              style: TextStyle(fontSize: 16, color: Colors.black87),
             ),
             SizedBox(height: 8),
             Text(
               'You will need to sign in again to access your account.',
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey,
-              ),
+              style: TextStyle(fontSize: 14, color: Colors.grey),
             ),
           ],
         ),
@@ -408,10 +498,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               foregroundColor: Colors.grey,
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
             ),
-            child: const Text(
-              'Cancel',
-              style: TextStyle(fontSize: 16),
-            ),
+            child: const Text('Cancel', style: TextStyle(fontSize: 16)),
           ),
           Container(
             decoration: BoxDecoration(
@@ -430,7 +517,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.transparent,
                 shadowColor: Colors.transparent,
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 12,
+                ),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
@@ -468,10 +558,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     try {
       await _supabase.auth.signOut();
-      
+
       // Close loading dialog
       if (mounted) Navigator.pop(context);
-      
+
       // Show success message
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -493,7 +583,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
       // Redirect to welcome screen after a short delay
       await Future.delayed(const Duration(milliseconds: 1500));
-      
+
       if (mounted) {
         Navigator.pushAndRemoveUntil(
           context,
@@ -504,7 +594,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     } catch (e) {
       // Close loading dialog
       if (mounted) Navigator.pop(context);
-      
+
       // Show error message
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -512,9 +602,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             children: [
               const Icon(Icons.error_outline, color: Colors.white, size: 20),
               const SizedBox(width: 8),
-              Expanded(
-                child: Text('Logout failed: ${e.toString()}'),
-              ),
+              Expanded(child: Text('Logout failed: ${e.toString()}')),
             ],
           ),
           backgroundColor: Colors.red.shade600,
