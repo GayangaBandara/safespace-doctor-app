@@ -20,11 +20,11 @@ class AuthService {
         },
       );
 
-      // Assign patient role after successful signup
+      // Assign doctor role after successful signup
       if (response.user != null) {
         await _supabase.from('user_roles').insert({
           'user_id': response.user!.id,
-          'role': 'patient',
+          'role': 'doctor',
         });
       }
 
@@ -36,7 +36,7 @@ class AuthService {
     }
   }
 
-  // Sign in with email and password - ONLY FOR PATIENTS
+  // Sign in with email and password - ONLY FOR doctor
   Future<AuthResponse> signInWithEmailPassword({
     required String email,
     required String password,
@@ -76,9 +76,9 @@ class AuthService {
           }
         }
 
-        if (userRole != 'patient') {
+        if (userRole != 'doctor') {
           await _supabase.auth.signOut();
-          throw Exception('Access denied. Only patients can login through this app.');
+          throw Exception('Access denied. Only doctors can login through this app.');
         }
       }
 
@@ -161,7 +161,7 @@ class AuthService {
 
   // Check if current user is patient
   Future<bool> isPatient() async {
-    return await hasRole('patient');
+    return await hasRole('doctor');
   }
 
   // NEW: Fetch display name from auth user (priority: metadata.username/name/full_name -> email prefix)
