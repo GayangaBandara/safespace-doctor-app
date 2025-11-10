@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:webview_flutter/webview_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:jitsi_meet_flutter_sdk/jitsi_meet_flutter_sdk.dart';
 
 class AppointmentScreen extends StatefulWidget {
   const AppointmentScreen({Key? key}) : super(key: key);
@@ -175,7 +175,7 @@ class _AppointmentScreenState extends State<AppointmentScreen> {
       final dateStr = '${_selectedDate!.year}-${_selectedDate!.month.toString().padLeft(2, '0')}-${_selectedDate!.day.toString().padLeft(2, '0')}';
       final timeStr = '${_selectedTime!.hour.toString().padLeft(2, '0')}:${_selectedTime!.minute.toString().padLeft(2, '0')}:00';
 
-      // Generate unique room name for 8x8 Jitsi
+      // Generate unique room name for Jitsi
       final roomName = _generateRoomName(request['user_name'].toString());
       
       await supabase.from('appointments').insert({
@@ -245,17 +245,68 @@ class _AppointmentScreenState extends State<AppointmentScreen> {
     }).toList();
   }
 
-  // Function to navigate to Meeting Screen with 8x8 Jitsi
-  void _navigateToMeetingScreen(String patientName, String meetingRoom) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => MeetingScreen(
-          patientName: patientName,
-          meetingRoom: meetingRoom,
+  // Function to start Jitsi meeting
+  void _startJitsiMeeting(String patientName, String meetingRoom) {
+    try {
+      final jitsiMeet = JitsiMeet();
+      
+      var listener = JitsiMeetEventListener(
+        conferenceJoined: (url) {
+          debugPrint("Conference joined: $url");
+        },
+        conferenceTerminated: (url, error) {
+          debugPrint("Conference terminated: $url, error: $error");
+          // Return to appointment screen when meeting ends
+          Navigator.pop(context);
+        },
+        conferenceWillJoin: (url) {
+          debugPrint("Conference will join: $url");
+        },
+        participantJoined: (email, name, role, participantId) {
+          debugPrint("Participant joined: $name ($email)");
+        },
+        participantLeft: (participantId) {
+          debugPrint("Participant left: $participantId");
+        },
+        audioMutedChanged: (muted) {
+          debugPrint("Audio muted: $muted");
+        },
+        videoMutedChanged: (muted) {
+          debugPrint("Video muted: $muted");
+        },
+        readyToClose: () {
+          debugPrint("Ready to close");
+          Navigator.pop(context);
+        },
+      );
+
+      var options = JitsiMeetConferenceOptions(
+        room: meetingRoom,
+        serverURL: "https://meet.jit.si", // You can change this to your Jitsi server
+        configOverrides: {
+          "startWithAudioMuted": false,
+          "startWithVideoMuted": false,
+          "subject": "Consultation with $patientName",
+          "prejoinPageEnabled": false,
+          "disableModeratorIndicator": false,
+        },
+        featureFlags: {
+          "unsaferoomwarning.enabled": false,
+          "pip.enabled": true,
+          "invite.enabled": true,
+        },
+        userInfo: JitsiMeetUserInfo(
+          displayName: "Doctor",
+          email: "doctor@example.com", // You can set actual doctor email here
         ),
-      ),
-    );
+      );
+
+      jitsiMeet.join(options, listener);
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error starting meeting: $e')),
+      );
+    }
   }
 
   @override
@@ -321,7 +372,7 @@ class _AppointmentScreenState extends State<AppointmentScreen> {
                             children: [
                               ElevatedButton(
                                 onPressed: isReady 
-                                    ? () => _navigateToMeetingScreen(
+                                    ? () => _startJitsiMeeting(
                                       appointment['user_name'] ?? 'Patient',
                                       appointment['meeting_room'] ?? _generateRoomName(appointment['user_name'] ?? 'default'),
                                     )
@@ -374,110 +425,6 @@ class _AppointmentScreenState extends State<AppointmentScreen> {
                 ],
               ),
             ),
-    );
-  }
-}
-
-// New MeetingScreen widget for 8x8 Jitsi integration
-class MeetingScreen extends StatefulWidget {
-  final String patientName;
-  final String meetingRoom;
-
-  const MeetingScreen({
-    Key? key,
-    required this.patientName,
-    required this.meetingRoom,
-  }) : super(key: key);
-
-  @override
-  State<MeetingScreen> createState() => _MeetingScreenState();
-}
-
-class _MeetingScreenState extends State<MeetingScreen> {
-  late final WebViewController controller;
-
-  @override
-  void initState() {
-    super.initState();
-    controller = WebViewController()
-      ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..loadHtmlString(_getJitsiHTML(widget.meetingRoom));
-  }
-
-  String _getJitsiHTML(String roomName) {
-    return '''
-<!DOCTYPE html>
-<html>
-  <head>
-    <script src='https://8x8.vc/vpaas-magic-cookie-c2abd8ebf09446c590d90592e049cd9f/external_api.js' async></script>
-    <style>html, body, #jaas-container { height: 100%; margin: 0; padding: 0; }</style>
-    <script type="text/javascript">
-      window.onload = () => {
-        const api = new JitsiMeetExternalAPI("8x8.vc", {
-          roomName: "vpaas-magic-cookie-c2abd8ebf09446c590d90592e049cd9f/$roomName",
-          parentNode: document.querySelector('#jaas-container'),
-          width: "100%",
-          height: "100%",
-          configOverwrite: {
-            prejoinPageEnabled: false,
-            startWithAudioMuted: true,
-            startWithVideoMuted: false,
-            disableModeratorIndicator: false,
-            startScreenSharing: false,
-            enableEmailInStats: false
-          },
-          interfaceConfigOverwrite: {
-            TOOLBAR_BUTTONS: [
-              'microphone', 'camera', 'closedcaptions', 'desktop', 'fullscreen',
-              'fodeviceselection', 'hangup', 'profile', 'chat', 'recording',
-              'livestreaming', 'etherpad', 'sharedvideo', 'settings', 'raisehand',
-              'videoquality', 'filmstrip', 'invite', 'feedback', 'stats', 'shortcuts',
-              'tileview', 'videobackgroundblur', 'download', 'help', 'mute-everyone',
-              'mute-video-everyone', 'security'
-            ],
-            SETTINGS_SECTIONS: ['devices', 'language', 'moderator', 'profile', 'calendar'],
-            SHOW_JITSI_WATERMARK: false,
-            SHOW_WATERMARK_FOR_GUESTS: false,
-            DEFAULT_BACKGROUND: '#474747',
-            OPTIMAL_BROWSERS: ['chrome', 'chromium', 'firefox', 'nwjs', 'electron', 'safari'],
-            BRAND_WATERMARK_LINK: '',
-          },
-          userInfo: {
-            displayName: 'Doctor',
-            email: ''
-          }
-        });
-        
-        api.addEventListener('videoConferenceJoined', () => {
-          console.log('Doctor joined the meeting');
-        });
-        
-        api.addEventListener('videoConferenceLeft', () => {
-          console.log('Doctor left the meeting');
-          // You can send a message back to Flutter here if needed
-        });
-        
-        api.addEventListener('participantJoined', (participant) => {
-          console.log('Participant joined:', participant);
-        });
-      }
-    </script>
-  </head>
-  <body>
-    <div id="jaas-container" style="height: 100vh; width: 100vw;" />
-  </body>
-</html>
-''';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('Meeting with ${widget.patientName}'),
-        backgroundColor: Colors.teal,
-      ),
-      body: WebViewWidget(controller: controller),
     );
   }
 }

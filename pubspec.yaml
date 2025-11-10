@@ -23,6 +23,8 @@ dependencies:
   webview_flutter: ^4.4.2
   webview_flutter_android: ^3.3.0
   webview_flutter_wkwebview: ^3.3.0
+  jitsi_meet_flutter_sdk: ^0.1.7
+  
   
 
 dev_dependencies:
