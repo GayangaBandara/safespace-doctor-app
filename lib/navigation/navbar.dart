@@ -44,10 +44,6 @@ class NavBar extends StatelessWidget {
                 text: 'Home',
               ),
               GButton(
-                icon: Icons.calendar_today,
-                text: 'Appointments',
-              ),
-              GButton(
                 icon: Icons.people,
                 text: 'Patients',
               ),

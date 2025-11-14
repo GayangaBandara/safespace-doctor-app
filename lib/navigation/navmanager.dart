@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:safespace_doctor_app/navigation/navbar.dart';
 import 'package:safespace_doctor_app/screens/home_screen.dart';
+import 'package:safespace_doctor_app/screens/profile_screen.dart';
 import 'package:safespace_doctor_app/screens/patients_screen.dart';
 import 'package:safespace_doctor_app/screens/appointment_screen.dart';
-import 'package:safespace_doctor_app/screens/profile_screen.dart';
 
 
 class NavManager extends StatefulWidget {
@@ -21,7 +21,6 @@ class _NavManagerState extends State<NavManager> {
 
   late final List<Widget> _screens = [
     HomeScreen(key: _homeScreenKey),
-    const AppointmentScreen(),
     const PatientsScreen(),
     const ProfileScreen(),
   ];
