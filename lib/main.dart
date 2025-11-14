@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:safespace_doctor_app/config.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:safespace_doctor_app/navigation/navmanager.dart';
+import 'package:safespace_doctor_app/screens/splash_screen.dart';
 import 'package:safespace_doctor_app/authentication/auth_gate.dart';
 import 'package:safespace_doctor_app/authentication/login_page.dart';
 import 'package:safespace_doctor_app/authentication/regesration.dart';
@@ -9,7 +10,7 @@ import 'package:safespace_doctor_app/screens/appointment_screen.dart';
 import 'package:webview_flutter_android/webview_flutter_android.dart';
 import 'package:webview_flutter_wkwebview/webview_flutter_wkwebview.dart';
 // Import for Android specific implementation
-// Import for iOS specific implementation  
+// Import for iOS specific implementation
 
 // Create a RouteObserver
 final RouteObserver<PageRoute> routeObserver = RouteObserver<PageRoute>();
@@ -51,12 +52,13 @@ class MyApp extends StatelessWidget {
       ),
       navigatorObservers: [routeObserver],
       routes: {
+        '/auth': (context) => const AuthGate(),
         '/login': (context) => const LoginPage(),
         '/signup': (context) => const RegistrationScreen(),
         '/home': (context) => const NavManager(),
         '/chatbot': (context) => AppointmentScreen(),
       },
-      home: const AuthGate(), // ✅ Routes to AuthGate
+      home: const SplashScreen(), // ✅ Show splash screen first
     );
   }
 }
